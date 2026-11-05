@@ -116,3 +116,4 @@ jobs:
             --title "FYT iOS build ${{ github.run_number }}" \
             --notes "Unsigned build of ${{ github.sha }}. Install with Sideloadly or AltStore." \
             --latest
+
