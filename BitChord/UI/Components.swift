@@ -182,7 +182,7 @@ struct ShelfCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ArtworkImage(url: item.artwork(Int(width * 3)), cornerRadius: item.kind == .artist ? width / 2 : Theme.cardCorner,
+            ArtworkImage(url: item.videoId.flatMap(OfflineArtwork.url(for:)) ?? item.artwork(Int(width * 3)), cornerRadius: item.kind == .artist ? width / 2 : Theme.cardCorner,
                          circle: item.kind == .artist)
                 .frame(width: width, height: item.isVideo ? width * 9 / 16 : width)
             VStack(alignment: item.kind == .artist ? .center : .leading, spacing: 1) {
@@ -405,6 +405,7 @@ struct DownloadAllButton: View {
         let list = (requested ?? songs).filter { !$0.isLocal }
         let done = library.downloadedCount(list)
         let active = library.activeDownloads(list)
+        let failed = library.failedCount(list)
         let allDone = !list.isEmpty && done == list.count && !fetching
         Button {
             Task {
@@ -425,6 +426,9 @@ struct DownloadAllButton: View {
                 } else if active > 0 {
                     ProgressView().controlSize(.small)
                     Text("Downloading… \(done) of \(list.count)")
+                } else if failed > 0 {
+                    Image(systemName: "arrow.clockwise.circle")
+                    Text("Retry \(failed) failed")
                 } else if allDone {
                     Image(systemName: "checkmark.circle.fill")
                     Text("Downloaded")

@@ -169,7 +169,7 @@ struct SongCollectionView: View {
         let all: [Song]
         switch kind {
         case .liked: all = library.liked
-        case .downloads: all = library.downloads
+        case .downloads: all = sortedDownloads
         case .history: all = library.history.map(\.song)
         case .local: all = library.localSongs
         }
@@ -198,6 +198,9 @@ struct SongCollectionView: View {
                     .listRowSeparator(.hidden)
                 }
             }
+            if kind == .downloads && query.isEmpty {
+                DownloadIssuesSection()
+            }
             ForEach(Array(list.enumerated()), id: \.element.id) { i, song in
                 SongRow(song: song) { player.play(list, startAt: i, source: title) }
                     .swipeActions {
@@ -213,33 +216,6 @@ struct SongCollectionView: View {
                         }
                     }
             }
-            if kind == .downloads {
-                let active = library.downloadStates.filter { if case .done = $0.value { return false }; return true }
-                if !active.isEmpty {
-                    Section("In Progress") {
-                        ForEach(Array(active.keys).sorted(), id: \.self) { id in
-                            let song = library.pendingDownloads[id]
-                            HStack(spacing: 12) {
-                                ArtworkImage(url: song?.artworkURL(120), cornerRadius: 5).frame(width: 44, height: 44)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(song?.title ?? id).lineLimit(1)
-                                    switch active[id] ?? .queued {
-                                    case .downloading(let p): ProgressView(value: p)
-                                    case .failed(let reason): Text(reason).font(.caption).foregroundStyle(.red).lineLimit(2)
-                                    default: Text("Waiting…").font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            .swipeActions {
-                                if let song {
-                                    Button(role: .destructive) { library.cancelDownload(song) } label: { Label("Remove", systemImage: "xmark") }
-                                    Button { library.retryDownload(song) } label: { Label("Retry", systemImage: "arrow.clockwise") }.tint(.blue)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
         .listStyle(.plain)
         .overlay {
@@ -252,6 +228,18 @@ struct SongCollectionView: View {
         .task { if kind == .liked { await account.syncLikes(force: false) } }
         .refreshable { if kind == .liked { await account.syncLikes() } }
         .toolbar {
+            if kind == .downloads && !library.downloads.isEmpty {
+                Menu {
+                    Picker("Sort By", selection: Bindable(AppSettings.shared).downloadsSort) {
+                        ForEach(DownloadsSort.allCases) { option in
+                            Label(option.label, systemImage: option.icon).tag(option)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .accessibilityLabel("Sort")
+            }
             if kind == .history && !library.history.isEmpty {
                 Button("Clear") { library.clearHistory() }
             }
@@ -266,6 +254,33 @@ struct SongCollectionView: View {
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { Task { await library.importFiles(urls) } }
+        }
+    }
+
+    /// Downloads in the order picked from the sort button.
+    private var sortedDownloads: [Song] {
+        let downloads = library.downloads   // newest batch first
+        switch AppSettings.shared.downloadsSort {
+        case .recent:
+            return downloads
+        case .title:
+            return downloads.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .artist:
+            return downloads.sorted {
+                let a = $0.artist.localizedStandardCompare($1.artist)
+                return a == .orderedSame ? $0.title.localizedStandardCompare($1.title) == .orderedAscending : a == .orderedAscending
+            }
+        case .playlist:
+            // Liked Songs order first, then your playlists in order, then anything else.
+            var position: [String: Int] = [:]
+            var next = 0
+            for song in library.liked + library.playlists.flatMap(\.songs) where position[song.videoId] == nil {
+                position[song.videoId] = next
+                next += 1
+            }
+            return downloads.enumerated()
+                .sorted { (position[$0.element.videoId] ?? Int.max, $0.offset) < (position[$1.element.videoId] ?? Int.max, $1.offset) }
+                .map(\.element)
         }
     }
 
@@ -559,6 +574,90 @@ struct YouTubeHistoryView: View {
             sections.removeAll { $0.songs.isEmpty }
         } catch {
             self.error = "Couldn't remove it: \(error.localizedDescription)"
+        }
+    }
+}
+
+
+/// At the top of Downloads: songs that failed (with Retry) and songs still downloading.
+struct DownloadIssuesSection: View {
+    @Environment(LibraryStore.self) private var library
+
+    var body: some View {
+        let failed = library.failedDownloads
+        let active = library.activeDownloadSongs
+        if !failed.isEmpty {
+            Section {
+                ForEach(failed) { song in
+                    row(song) {
+                        Text(reason(song)).font(.caption).foregroundStyle(.red).lineLimit(2)
+                    } trailing: {
+                        Button { library.retryDownload(song) } label: {
+                            Image(systemName: "arrow.clockwise.circle.fill").font(.title2)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Theme.accent)
+                        .accessibilityLabel("Retry")
+                    }
+                    .swipeActions {
+                        Button(role: .destructive) { library.cancelDownload(song) } label: { Label("Remove", systemImage: "xmark") }
+                    }
+                }
+            } header: {
+                HStack {
+                    Label("\(failed.count) failed", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Spacer()
+                    Button("Retry All") { library.retryAllFailed() }
+                        .font(.subheadline.weight(.semibold))
+                        .buttonStyle(.borderless)
+                        .tint(Theme.accent)
+                }
+                .textCase(nil)
+            }
+        }
+        if !active.isEmpty {
+            Section {
+                ForEach(active) { song in
+                    row(song) {
+                        if case .downloading(let p) = library.downloadStates[song.videoId] {
+                            ProgressView(value: p).tint(Theme.accent)
+                        } else {
+                            Text("Waiting…").font(.caption).foregroundStyle(.secondary)
+                        }
+                    } trailing: {
+                        Button { library.cancelDownload(song) } label: {
+                            Image(systemName: "xmark.circle.fill").font(.title2)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Cancel")
+                    }
+                }
+            } header: {
+                Text("Downloading \(active.count)").textCase(nil)
+            }
+        }
+        if !failed.isEmpty || !active.isEmpty {
+            Section {} header: { Text("Downloaded").textCase(nil) }
+        }
+    }
+
+    private func reason(_ song: Song) -> String {
+        if case .failed(let text) = library.downloadStates[song.videoId] { return text }
+        return "Download failed"
+    }
+
+    private func row<Detail: View, Trailing: View>(_ song: Song, @ViewBuilder detail: () -> Detail,
+                                                   @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: 12) {
+            ArtworkImage(url: song.artworkURL(120), cornerRadius: 5).frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(song.title).lineLimit(1)
+                detail()
+            }
+            Spacer(minLength: 8)
+            trailing()
         }
     }
 }
