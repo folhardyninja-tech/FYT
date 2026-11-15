@@ -42,7 +42,7 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIStatusBarStyle: UIStatusBarStyleDefault
-        NSLocalNetworkUsageDescription: FYT looks for TVs and speakers on your Wi-Fi so you can cast music to them.
+        NSLocalNetworkUsageDescription: Music looks for TVs and speakers on your Wi-Fi so you can cast music to them.
         NSBonjourServices:
           - _googlecast._tcp
           - _CC1AD845._googlecast._tcp

@@ -35,7 +35,7 @@ struct ListenTogetherView: View {
                 Button("Save") { party.server = serverText }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Leave this on the default to listen with other FYT users.")
+                Text("Leave this on the default to listen with other Music users.")
             }
             .confirmationDialog("Leave the party?", isPresented: $confirmLeave, titleVisibility: .visible) {
                 Button("Leave Party", role: .destructive) { Task { await party.leave() } }
@@ -119,7 +119,7 @@ struct ListenTogetherView: View {
                 }
                 HStack(spacing: 12) {
                     ShareLink(item: Party.inviteLink(code),
-                              message: Text("Listen with me on FYT — party code \(code)")) {
+                              message: Text("Listen with me on Music — party code \(code)")) {
                         Label("Invite", systemImage: "square.and.arrow.up")
                     }
                     .buttonStyle(.borderedProminent)

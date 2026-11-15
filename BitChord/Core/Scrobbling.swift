@@ -143,7 +143,7 @@ final class DiscordPresence: NSObject, @unchecked Sendable {
         if let song, playing {
             let now = Date().timeIntervalSince1970
             var activity: JObj = [
-                "name": "FYT",
+                "name": "Music",
                 "type": 2,
                 "details": String(song.title.prefix(128)),
                 "state": String(("by " + song.artist).prefix(128)),

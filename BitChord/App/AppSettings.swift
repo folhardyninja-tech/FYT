@@ -23,7 +23,7 @@ enum AccentChoice: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .red: "Red"
-        case .youtube: "FYT Red"
+        case .youtube: "Music Red"
         case .pink: "Pink"
         case .orange: "Orange"
         case .yellow: "Yellow"

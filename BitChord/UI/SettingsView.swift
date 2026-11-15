@@ -153,7 +153,7 @@ struct SettingsView: View {
 
             Section("About") {
                 LabeledContent("Version", value: AppInfo.versionText)
-                Text("This FYT app is created by Lucky Raj and is not affiliated with, endorsed by, or connected to YouTube or Google.")
+                Text("This Music app is created by Lucky Raj and is not affiliated with, endorsed by, or connected to YouTube or Google.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
